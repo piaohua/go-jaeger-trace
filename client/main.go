@@ -19,9 +19,10 @@ import (
 var t opentracing.Tracer
 var closer io.Closer
 
-// const port = ":8081"
+const port = ":8081"
+
 // Traefik endpoint
-const port = ":80"
+// const port = ":80"
 
 func main() {
 	t, closer = tracer.New("client", "localhost:5775")
