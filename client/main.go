@@ -30,7 +30,8 @@ func main() {
 
 	// ctx := context.Background()
 	// askGoogle(ctx)
-	runClient(t)
+	//runClient(t)
+	runClient2(t)
 }
 
 type clientTrace struct {
@@ -127,4 +128,50 @@ func askGoogle(ctx context.Context) {
 	}
 
 	defer res.Body.Close()
+}
+
+func runClient2(tracer opentracing.Tracer) {
+	// nethttp.Transport from go-stdlib will do the tracing
+	c := &http.Client{Transport: &nethttp.Transport{}}
+
+	// Create a top-level span to represent full work of the client
+	span := tracer.StartSpan("client2")
+	span.SetTag("client2_tag", "client2")
+	defer span.Finish()
+
+	ctx := opentracing.ContextWithSpan(context.Background(), span)
+
+	endpoint := fmt.Sprintf("http://localhost%s/home", port)
+	log.Println("endpoint", endpoint)
+	req, err := http.NewRequest("GET", endpoint, nil)
+	// The hostname for traefik service discovery
+	req.Host = "foo"
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Inject the trace information into the HTTP Headers.
+	err = span.Tracer().Inject(span.Context(),
+		opentracing.TextMap,
+		opentracing.HTTPHeadersCarrier(req.Header))
+	if err != nil {
+		log.Fatalf("%s: Couldn't inject headers (%v)", req.URL.Path, err)
+	}
+
+	req = req.WithContext(ctx)
+	req, ht := nethttp.TraceRequest(tracer, req)
+	defer ht.Finish()
+
+	res, err := c.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println(string(body))
 }
